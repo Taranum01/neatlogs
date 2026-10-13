@@ -8,6 +8,7 @@ OpenAI, Azure OpenAI, Google GenAI, Vertex AI, and Anthropic wrappers.
 import asyncio
 
 import pytest
+from opentelemetry.trace import StatusCode
 
 import neatlogs
 from neatlogs._wrap_utils import set_neatlogs_provider
@@ -31,7 +32,12 @@ async def _cancel_and_get_span(exporter, patch_fn, obj, call):
     with pytest.raises(asyncio.CancelledError):
         await task
     await asyncio.sleep(0.02)
-    return exporter.get_finished_spans()
+    spans = exporter.get_finished_spans()
+    for span in spans:
+        assert span.status.status_code == StatusCode.UNSET
+        assert span.attributes.get("neatlogs.stream.cancelled") is True
+        assert not any(event.name == "exception" for event in span.events)
+    return spans
 
 
 @pytest.mark.asyncio
